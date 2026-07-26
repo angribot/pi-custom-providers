@@ -1,19 +1,39 @@
 {
-  "peerDependencies": {
-    "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-coding-agent": "*"
-  },
   "name": "pi-custom-providers",
-  "private": true,
+  "version": "0.1.0",
+  "description": "pi extension for custom providers, with metadata and pricing that line up",
   "type": "module",
-  "scripts": {
-    "test": "node --test \"tests/*.test.mjs\"",
-    "typecheck": "tsc"
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "providers",
+    "relay",
+    "pricing"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/angribot/pi-custom-providers.git"
   },
+  "files": [
+    "index.ts",
+    "src",
+    "custom-providers.schema.json",
+    "README.md",
+    "LICENSE"
+  ],
   "pi": {
     "extensions": [
       "./index.ts"
     ]
+  },
+  "scripts": {
+    "test": "node --test \"src/*.test.mjs\"",
+    "typecheck": "tsc"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "^0.82.1",
