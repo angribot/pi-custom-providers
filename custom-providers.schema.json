@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Custom Providers Configuration",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": {
+    "$ref": "#/$defs/providerConfig"
+  },
+  "$defs": {
+    "providerConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseUrl",
+        "api"
+      ],
+      "if": {
+        "properties": {
+          "api": {
+            "not": {
+              "const": "openai-responses"
+            }
+          }
+        },
+        "required": [
+          "api"
+        ]
+      },
+      "then": {
+        "not": {
+          "required": ["fastModePolicy"]
+        }
+      },
+      "properties": {
+        "baseUrl": {
+          "type": "string",
+          "minLength": 1
+        },
+        "api": {
+          "type": "string",
+          "enum": [
+            "openai-responses",
+            "openai-completions",
+            "anthropic-messages"
+          ]
+        },
+        "fastModePolicy": {
+          "type": "string",
+          "enum": [
+            "response",
+            "request",
+            "disabled"
+          ],
+          "default": "response",
+          "description": "Whether fast mode is offered, and whether the relay's reported cost already includes the priority surcharge (response, the default) or it must be applied locally (request). Only valid for openai-responses providers."
+        },
+        "costMultiplier": {
+          "type": "number",
+          "minimum": 0
+        },
+        "modelCostMultipliers": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          },
+          "description": "Per-model cost multipliers keyed by exact model ID."
+        }
+      }
+    }
+  }
+}
