@@ -1,0 +1,23 @@
+node_modules/
+
+# Dev-only toolchain lock; no CI consumes it and prod deps are empty (peerDependencies).
+# Restore by running `npm install` if CI or a second contributor arrives.
+package-lock.json
+
+# Local configuration and credentials
+/.env
+/.env.*
+!/.env.example
+!/.env.*.example
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local Git worktrees
+.worktrees/
