@@ -8,5 +8,5 @@
     "allowImportingTsExtensions": true,
     "skipLibCheck": true
   },
-  "include": ["index.ts", "fast-mode.ts", "models.ts", "providers.ts"]
+  "include": ["index.ts", "src/fast-mode.ts", "src/models.ts", "src/providers.ts"]
 }

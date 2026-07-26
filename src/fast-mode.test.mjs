@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { registerFastMode } from "../fast-mode.ts";
+import { registerFastMode } from "./fast-mode.ts";
 import {
   createTestContext,
   createTestPi,

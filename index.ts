@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { registerFastMode } from "./fast-mode.ts";
-import { registerProviders } from "./providers.ts";
+import { registerFastMode } from "./src/fast-mode.ts";
+import { registerProviders } from "./src/providers.ts";
 
 export default function (pi: ExtensionAPI) {
   const { fastModePolicies } = registerProviders(pi);

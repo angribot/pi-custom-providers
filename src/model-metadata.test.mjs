@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getBuiltinModels } from "@earendil-works/pi-ai/providers/all";
 
-import { buildModelDefinition } from "../models.ts";
+import { buildModelDefinition } from "./models.ts";
 
 const PROVIDERS = ["openai", "anthropic", "xai", "moonshotai", "zai", "deepseek"];
 const CATALOGS = new Map(PROVIDERS.map((provider) => [provider, getBuiltinModels(provider)]));
