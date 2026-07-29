@@ -154,7 +154,11 @@ async function fetchIds(
   return ids;
 }
 
-export function createModelRefresh(provider: string, config: ProviderConfig) {
+export function createModelRefresh(
+  provider: string,
+  config: ProviderConfig,
+  isForcedRefreshRequested: () => boolean,
+) {
   let preScopeAttempted = false;
   let preScopeRefresh: Promise<ProviderModelConfig[]> | undefined;
   const refresh = async (
@@ -167,10 +171,14 @@ export function createModelRefresh(provider: string, config: ProviderConfig) {
 
     const cached = (ids ?? []).map((id) => buildModelDefinition(id, config));
     const apiKey = context.credential?.type === "api_key" ? context.credential.key : undefined;
+    const locallyForced = context.allowNetwork
+      && !context.signal?.aborted
+      && apiKey !== undefined
+      && isForcedRefreshRequested();
     if (
       context.signal?.aborted
       || (!(context.allowNetwork || (preScope && ids === undefined)))
-      || (!context.force && ids !== undefined && fresh(stored))
+      || (!(context.force || locallyForced) && ids !== undefined && fresh(stored))
       || !apiKey
     ) {
       return cached;

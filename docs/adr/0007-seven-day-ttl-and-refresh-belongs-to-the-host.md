@@ -1,5 +1,7 @@
 # 7-day TTL, and forcing a refresh belongs to the host
 
+Superseded in part by ADR 0013: the TTL remains, but the extension now bridges the host's missing force surface.
+
 A stored Catalog younger than 7 days suppresses network fetches. Relay catalogs change on the order of weeks, and every fetch is latency the user pays at startup, so the TTL is deliberately long.
 
 The extension registers no refresh command. `force` arrives from the host, which already owns the model-refresh surface; a second entry point would mean two ways to invalidate the same file with no shared notion of which one the user meant.

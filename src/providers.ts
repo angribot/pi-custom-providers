@@ -58,25 +58,37 @@ function fastModePolicy(configured: unknown, api: ProviderApi): FastModePolicy |
 
 export function registerProviders(pi: ExtensionAPI): {
   fastModePolicies: Map<string, FastModePolicy>;
+  beginForcedCatalogRefresh: () => { providerCount: number; finish: () => void };
 } {
   const fastModePolicies = new Map<string, FastModePolicy>();
-  const features = { fastModePolicies };
+  let providerCount = 0;
+  let forcedCatalogRefreshDepth = 0;
+  const registration = {
+    fastModePolicies,
+    beginForcedCatalogRefresh: () => {
+      forcedCatalogRefreshDepth++;
+      return {
+        providerCount,
+        finish: () => { forcedCatalogRefreshDepth--; },
+      };
+    },
+  };
   const configPath = path.join(
     process.env.PI_CODING_AGENT_DIR ?? path.join(homedir(), ".pi", "agent"),
     "custom-providers.json",
   );
-  if (!fs.existsSync(configPath)) return features;
+  if (!fs.existsSync(configPath)) return registration;
 
   let config: unknown;
   try {
     config = JSON.parse(fs.readFileSync(configPath, "utf8"));
   } catch (error) {
     console.error(`[custom-providers] Config parse failed: ${formatError(error)}`);
-    return features;
+    return registration;
   }
   if (!isRecord(config)) {
     console.error("[custom-providers] Invalid config; expected an object.");
-    return features;
+    return registration;
   }
 
   for (const [name, configured] of Object.entries(config)) {
@@ -90,8 +102,13 @@ export function registerProviders(pi: ExtensionAPI): {
       pi.registerProvider(name, {
         baseUrl: provider.baseUrl,
         api: provider.api,
-        refreshModels: createModelRefresh(name, provider),
+        refreshModels: createModelRefresh(
+          name,
+          provider,
+          () => forcedCatalogRefreshDepth > 0,
+        ),
       });
+      providerCount++;
       const policy = fastModePolicy(configured, provider.api);
       if (policy) fastModePolicies.set(name, policy);
     } catch (error) {
@@ -99,5 +116,5 @@ export function registerProviders(pi: ExtensionAPI): {
     }
   }
 
-  return features;
+  return registration;
 }

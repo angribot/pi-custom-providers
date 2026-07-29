@@ -61,7 +61,9 @@ recover context window, capabilities, and base pricing; unmatched IDs fall back 
 Prices are then scaled by the multipliers above.
 
 Metadata is cached in pi's model store. A cached entry is discarded whenever it is unusable, not only on
-a fingerprint mismatch.
+a fingerprint mismatch. Catalogs stay fresh for seven days. Run `/refresh-custom-models` inside pi to
+request an immediate refresh for every configured relay; a failed request keeps the stored Catalog
+available.
 
 ## Fast mode
 
