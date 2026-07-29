@@ -272,6 +272,68 @@ test("uses catalogs below the 7-day TTL and refreshes catalogs past TTL or force
   }
 });
 
+test("/refresh-custom-models scopes forced Catalog refresh to its host refresh", async () => {
+  const harness = await initialize({
+    providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
+  });
+  const storage = createStore({ checkedAt: Date.now(), models: [storedModel()] });
+  let requests = 0;
+  let registryRefreshes = 0;
+  globalThis.fetch = async () => {
+    requests++;
+    return { ok: true, status: 200, statusText: "OK", json: async () => ({ data: [{ id: "refreshed" }] }) };
+  };
+  try {
+    assert.deepEqual((await refresh(harness, storage)).map(({ id }) => id), [officialOpenAIModel.id]);
+
+    const command = harness.commands.get("refresh-custom-models");
+    assert.ok(command, "refresh command registered");
+    await assert.rejects(command.handler("", {
+      modelRegistry: {
+        async refresh() {
+          registryRefreshes++;
+          throw new Error("host refresh failed");
+        },
+      },
+      ui: { notify() {} },
+    }), /host refresh failed/);
+    assert.deepEqual((await refresh(harness, storage)).map(({ id }) => id), [officialOpenAIModel.id]);
+    assert.equal(requests, 0);
+
+    let releaseFirstRefresh;
+    const firstRefreshPaused = new Promise((resolve) => { releaseFirstRefresh = resolve; });
+    const firstCommand = command.handler("", {
+      modelRegistry: {
+        async refresh() {
+          registryRefreshes++;
+          await firstRefreshPaused;
+          await refresh(harness, storage);
+        },
+      },
+      ui: { notify() {} },
+    });
+    await command.handler("", {
+      modelRegistry: {
+        async refresh() {
+          registryRefreshes++;
+          await refresh(harness, storage);
+        },
+      },
+      ui: { notify() {} },
+    });
+    releaseFirstRefresh();
+    await firstCommand;
+
+    assert.equal(registryRefreshes, 3);
+    assert.equal(requests, 2);
+    assert.deepEqual(storage.current.models.map(({ id }) => id), ["refreshed"]);
+    assert.deepEqual((await refresh(harness, storage)).map(({ id }) => id), ["refreshed"]);
+    assert.equal(requests, 2);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("cache-only startup rejects invalid stores and shares one eligible pre-scope discovery", async () => {
   const harness = await initialize({
     providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },

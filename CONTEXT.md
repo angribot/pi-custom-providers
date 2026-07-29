@@ -71,3 +71,7 @@ _Avoid_: signature, validation, checksum
 **Pre-Scope Discovery**:
 One opportunistic network fetch during Pi's offline initialization pass, so relay models exist before Pi resolves model scope and `--continue` can select one.
 _Avoid_: bootstrap, eager refresh, warmup
+
+**Forced Catalog Refresh**:
+One user-requested network refresh that bypasses Catalog Freshness for configured relays, exposed as `/refresh-custom-models` because Pi's host refresh command does not load extension providers.
+_Avoid_: cache clear, cache reset, reload
