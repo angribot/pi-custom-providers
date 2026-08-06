@@ -73,5 +73,5 @@ One opportunistic network fetch during Pi's offline initialization pass, so rela
 _Avoid_: bootstrap, eager refresh, warmup
 
 **Forced Catalog Refresh**:
-One user-requested network refresh that bypasses Catalog Freshness for configured relays, exposed as `/refresh-custom-models` because Pi's host refresh command does not load extension providers.
+One user-requested, provider-targeted network refresh that bypasses Catalog Freshness for configured relays. `/refresh-custom-models` delegates force, generation, cancellation, and provider errors to Pi's native model refresh contract because Pi's host refresh command does not load extension providers.
 _Avoid_: cache clear, cache reset, reload

@@ -62,7 +62,8 @@ Prices are then scaled by the multipliers above.
 
 Metadata is cached in pi's model store. A cached entry is discarded whenever it is unusable, not only on
 a fingerprint mismatch. Catalogs stay fresh for seven days. Run `/refresh-custom-models` inside pi to
-request an immediate refresh for every configured relay; a failed request keeps the stored Catalog
+force an immediate, provider-targeted refresh for every valid configured relay. The command reports
+completion, cancellation, or the Provider IDs that failed; a failed request keeps the stored Catalog
 available.
 
 ## Fast mode
@@ -77,7 +78,7 @@ priority surcharge:
 ## Not covered
 
 - No `apiKey` or custom headers in config. Use pi's credential resolution.
-- Concurrent forced refreshes are not deduplicated; both fetches run.
+- Overlapping forced refreshes follow pi's generation rules: a newer refresh cancels an older one for the same relay.
 - Cost multipliers apply to metadata only. They do not change what the relay charges you.
 - The `request` surcharge table covers the GPT-5 family. Pre-GPT-5 models fall back to `2×`, which
   overstates their real premium (GPT-4.1 is 1.75×, GPT-4o 1.7×).

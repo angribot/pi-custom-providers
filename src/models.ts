@@ -154,10 +154,21 @@ async function fetchIds(
   return ids;
 }
 
+function catalogStoreEntry(ids: readonly string[], provider: string, config: ProviderConfig) {
+  return {
+    checkedAt: Date.now(),
+    models: ids.map((id) => ({
+      ...buildModelDefinition(id, config, 1),
+      provider,
+      api: config.api,
+      baseUrl: config.baseUrl,
+    })),
+  };
+}
+
 export function createModelRefresh(
   provider: string,
   config: ProviderConfig,
-  isForcedRefreshRequested: () => boolean,
 ) {
   let preScopeAttempted = false;
   let preScopeRefresh: Promise<ProviderModelConfig[]> | undefined;
@@ -165,44 +176,54 @@ export function createModelRefresh(
     context: RefreshModelsContext,
     preScope = false,
   ): Promise<ProviderModelConfig[]> => {
-    const stored = await context.store.read();
+    const stored = context.stored;
     const ids = storedIds(stored, provider, config.api, config.baseUrl);
-    if (stored !== undefined && ids === undefined) await context.store.delete();
+    if (
+      stored !== undefined
+      && ids === undefined
+      && !(await context.publish({ persist: null }))
+    ) return [];
 
     const cached = (ids ?? []).map((id) => buildModelDefinition(id, config));
     const apiKey = context.credential?.type === "api_key" ? context.credential.key : undefined;
-    const locallyForced = context.allowNetwork
-      && !context.signal?.aborted
-      && apiKey !== undefined
-      && isForcedRefreshRequested();
     if (
-      context.signal?.aborted
+      context.signal.aborted
       || (!(context.allowNetwork || (preScope && ids === undefined)))
-      || (!(context.force || locallyForced) && ids !== undefined && fresh(stored))
+      || (!context.force && ids !== undefined && fresh(stored))
       || !apiKey
     ) {
       return cached;
     }
 
-    const fetchedIds = await fetchIds(config.baseUrl, config.api, apiKey, context.signal);
-    if (context.signal?.aborted) return cached;
+    // Discovery is shared across superseding cache-only generations, so the request
+    // uses its own timeout while each generation still guards publication with its signal.
+    const fetchedIds = await fetchIds(
+      config.baseUrl,
+      config.api,
+      apiKey,
+      preScope ? undefined : context.signal,
+    );
     const models = fetchedIds.map((id) => buildModelDefinition(id, config));
-    await context.store.write({
-      checkedAt: Date.now(),
-      models: fetchedIds.map((id) => ({
-        ...buildModelDefinition(id, config, 1),
-        provider,
-        api: config.api,
-        baseUrl: config.baseUrl,
-      })),
+    // A superseding cache-only generation can still publish this shared discovery result.
+    if (context.signal.aborted) return preScope ? models : cached;
+    const published = await context.publish({
+      persist: catalogStoreEntry(fetchedIds, provider, config),
     });
-    return models;
+    return published || preScope ? models : cached;
   };
 
   return (context: RefreshModelsContext): Promise<ProviderModelConfig[]> => {
-    if (!context.allowNetwork && preScopeRefresh) return preScopeRefresh;
+    if (!context.allowNetwork && preScopeRefresh) {
+      return preScopeRefresh.then(async (models) => {
+        if (context.signal.aborted || models.length === 0) return [];
+        const published = await context.publish({
+          persist: catalogStoreEntry(models.map(({ id }) => id), provider, config),
+        });
+        return published ? models : [];
+      });
+    }
     const apiKey = context.credential?.type === "api_key" ? context.credential.key : undefined;
-    if (!context.allowNetwork && !preScopeAttempted && apiKey && process.env.PI_OFFLINE === undefined && !context.signal?.aborted) {
+    if (!context.allowNetwork && !preScopeAttempted && apiKey && process.env.PI_OFFLINE === undefined && !context.signal.aborted) {
       preScopeAttempted = true;
       const promise = Promise.resolve()
         .then(() => refresh(context, true))

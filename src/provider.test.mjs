@@ -65,15 +65,26 @@ function initialize(config) {
   return initializeContent(JSON.stringify(config));
 }
 
-function createStore(entry) {
+function createStore(entry, { acceptPublication = true } = {}) {
   let current = entry;
   const writes = [];
   let deleted = 0;
   return {
-    store: {
-      async read() { return current; },
-      async write(next) { current = structuredClone(next); writes.push(current); },
-      async delete() { current = undefined; deleted++; },
+    context() {
+      return {
+        stored: current === undefined ? undefined : structuredClone(current),
+        async publish({ persist }) {
+          if (!acceptPublication) return false;
+          if (persist === null) {
+            current = undefined;
+            deleted++;
+          } else if (persist !== undefined) {
+            current = structuredClone(persist);
+            writes.push(current);
+          }
+          return true;
+        },
+      };
     },
     get current() { return current; },
     get writes() { return writes; },
@@ -101,8 +112,9 @@ async function refresh(harness, store, options = {}) {
   assert.ok(provider, "provider registered");
   return provider.config.refreshModels({
     credential: { type: "api_key", key: "test-key" },
-    store: store.store,
+    ...store.context(),
     allowNetwork: true,
+    signal: new AbortController().signal,
     ...options,
   });
 }
@@ -272,66 +284,62 @@ test("uses catalogs below the 7-day TTL and refreshes catalogs past TTL or force
   }
 });
 
-test("/refresh-custom-models scopes forced Catalog refresh to its host refresh", async () => {
+test("/refresh-custom-models targets configured relays and reports the host result", async () => {
   const harness = await initialize({
-    providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
+    providerA: { baseUrl: "https://a.invalid/v1", api: "openai-responses" },
+    providerB: { baseUrl: "https://b.invalid/v1", api: "openai-completions" },
   });
-  const storage = createStore({ checkedAt: Date.now(), models: [storedModel()] });
-  let requests = 0;
-  let registryRefreshes = 0;
-  globalThis.fetch = async () => {
-    requests++;
-    return { ok: true, status: 200, statusText: "OK", json: async () => ({ data: [{ id: "refreshed" }] }) };
+  const command = harness.commands.get("refresh-custom-models");
+  assert.ok(command, "refresh command registered");
+
+  const results = [
+    { aborted: false, errors: new Map() },
+    { aborted: true, errors: new Map() },
+    { aborted: false, errors: new Map([["providerB", new Error("relay unavailable")]]) },
+  ];
+  const refreshOptions = [];
+  const notifications = [];
+  const ctx = {
+    modelRegistry: {
+      async refresh(options) {
+        refreshOptions.push(options);
+        return results.shift();
+      },
+    },
+    ui: {
+      notify(message, level) { notifications.push([message, level]); },
+    },
   };
-  try {
-    assert.deepEqual((await refresh(harness, storage)).map(({ id }) => id), [officialOpenAIModel.id]);
 
-    const command = harness.commands.get("refresh-custom-models");
-    assert.ok(command, "refresh command registered");
-    await assert.rejects(command.handler("", {
-      modelRegistry: {
-        async refresh() {
-          registryRefreshes++;
-          throw new Error("host refresh failed");
-        },
-      },
-      ui: { notify() {} },
-    }), /host refresh failed/);
-    assert.deepEqual((await refresh(harness, storage)).map(({ id }) => id), [officialOpenAIModel.id]);
-    assert.equal(requests, 0);
+  await command.handler("", ctx);
+  await command.handler("", ctx);
+  await command.handler("", ctx);
 
-    let releaseFirstRefresh;
-    const firstRefreshPaused = new Promise((resolve) => { releaseFirstRefresh = resolve; });
-    const firstCommand = command.handler("", {
-      modelRegistry: {
-        async refresh() {
-          registryRefreshes++;
-          await firstRefreshPaused;
-          await refresh(harness, storage);
-        },
-      },
-      ui: { notify() {} },
-    });
-    await command.handler("", {
-      modelRegistry: {
-        async refresh() {
-          registryRefreshes++;
-          await refresh(harness, storage);
-        },
-      },
-      ui: { notify() {} },
-    });
-    releaseFirstRefresh();
-    await firstCommand;
+  assert.deepEqual(refreshOptions, [
+    { providers: ["providerA", "providerB"], force: true },
+    { providers: ["providerA", "providerB"], force: true },
+    { providers: ["providerA", "providerB"], force: true },
+  ]);
+  assert.deepEqual(notifications, [
+    ["Catalog refresh completed for 2 relays", "info"],
+    ["Catalog refresh cancelled", "warning"],
+    ["Catalog refresh failed for providerB: relay unavailable", "error"],
+  ]);
+});
 
-    assert.equal(registryRefreshes, 3);
-    assert.equal(requests, 2);
-    assert.deepEqual(storage.current.models.map(({ id }) => id), ["refreshed"]);
-    assert.deepEqual((await refresh(harness, storage)).map(({ id }) => id), ["refreshed"]);
-    assert.equal(requests, 2);
-  } finally {
-    globalThis.fetch = previousFetch;
-  }
+test("/refresh-custom-models skips the host refresh when no relays are configured", async () => {
+  const harness = await initialize({});
+  const command = harness.commands.get("refresh-custom-models");
+  const notifications = [];
+  await command.handler("", {
+    modelRegistry: {
+      async refresh() { throw new Error("refresh should not run"); },
+    },
+    ui: {
+      notify(message, level) { notifications.push([message, level]); },
+    },
+  });
+  assert.deepEqual(notifications, [["No relays configured", "warning"]]);
 });
 
 test("cache-only startup rejects invalid stores and shares one eligible pre-scope discovery", async () => {
@@ -410,24 +418,81 @@ test("cache-only startup rejects invalid stores and shares one eligible pre-scop
   }
 });
 
-test("overlapping forced refreshes are not locally merged", async () => {
+test("a superseding cache-only generation publishes the shared Pre-Scope Discovery", async () => {
+  const harness = await initialize({
+    providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
+  });
+  const storage = createStore();
+  const firstController = new AbortController();
+  let requests = 0;
+  let respond;
+  globalThis.fetch = async (_url, { signal }) => new Promise((resolve, reject) => {
+    requests++;
+    respond = () => resolve({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({ data: [{ id: "discovered" }] }),
+    });
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+  });
+  try {
+    const first = refresh(harness, storage, {
+      allowNetwork: false,
+      signal: firstController.signal,
+    });
+    for (let attempt = 0; attempt < 20 && !respond; attempt++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.ok(respond, "Pre-Scope Discovery started");
+
+    const replacement = refresh(harness, storage, { allowNetwork: false });
+    firstController.abort();
+    respond();
+
+    await first;
+    const models = await replacement;
+    assert.deepEqual(models.map(({ id }) => id), ["discovered"]);
+    assert.equal(requests, 1);
+    assert.deepEqual(storage.current.models.map(({ id }) => id), ["discovered"]);
+    assert.equal(storage.writes.length, 1);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("a superseded forced refresh is cancelled while its replacement publishes", async () => {
   const harness = await initialize({
     providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
   });
   const storage = createStore({ checkedAt: Date.now(), models: [storedModel()] });
-  const responses = [];
-  globalThis.fetch = async () => new Promise((resolve) => responses.push(resolve));
+  const requests = [];
+  globalThis.fetch = async (_url, { signal }) => new Promise((resolve, reject) => {
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    requests.push(resolve);
+  });
   try {
-    const first = refresh(harness, storage, { force: true });
-    const second = refresh(harness, storage, { force: true });
-    for (let attempt = 0; attempt < 20 && responses.length < 2; attempt++) {
+    const firstController = new AbortController();
+    const first = refresh(harness, storage, { force: true, signal: firstController.signal });
+    const firstCancelled = assert.rejects(first, { name: "AbortError" });
+    const replacement = refresh(harness, storage, { force: true });
+    for (let attempt = 0; attempt < 20 && requests.length < 2; attempt++) {
       await new Promise((resolve) => setImmediate(resolve));
     }
-    assert.equal(responses.length, 2);
-    for (const resolve of responses) {
-      resolve({ ok: true, status: 200, statusText: "OK", json: async () => ({ data: [{ id: "refreshed" }] }) });
-    }
-    await Promise.all([first, second]);
+    assert.equal(requests.length, 2);
+
+    firstController.abort();
+    requests[1]({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({ data: [{ id: "replacement" }] }),
+    });
+
+    await firstCancelled;
+    assert.deepEqual((await replacement).map(({ id }) => id), ["replacement"]);
+    assert.deepEqual(storage.current.models.map(({ id }) => id), ["replacement"]);
+    assert.equal(storage.writes.length, 1);
   } finally {
     globalThis.fetch = previousFetch;
   }
@@ -470,6 +535,28 @@ test("cancelled catalog response neither publishes nor writes", async () => {
   try {
     const models = await refresh(harness, storage, { signal: controller.signal });
     assert.deepEqual(models.map(({ id }) => id), [officialOpenAIModel.id]);
+    assert.deepEqual(storage.writes, []);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("superseded catalog publication preserves the stored catalog", async () => {
+  const harness = await initialize({
+    providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
+  });
+  const stored = { checkedAt: 0, models: [storedModel()] };
+  const storage = createStore(stored, { acceptPublication: false });
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    json: async () => ({ data: [{ id: "superseded" }] }),
+  });
+  try {
+    const models = await refresh(harness, storage);
+    assert.deepEqual(models.map(({ id }) => id), [officialOpenAIModel.id]);
+    assert.deepEqual(storage.current, stored);
     assert.deepEqual(storage.writes, []);
   } finally {
     globalThis.fetch = previousFetch;

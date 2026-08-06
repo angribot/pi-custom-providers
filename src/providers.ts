@@ -58,21 +58,11 @@ function fastModePolicy(configured: unknown, api: ProviderApi): FastModePolicy |
 
 export function registerProviders(pi: ExtensionAPI): {
   fastModePolicies: Map<string, FastModePolicy>;
-  beginForcedCatalogRefresh: () => { providerCount: number; finish: () => void };
+  providerIds: string[];
 } {
   const fastModePolicies = new Map<string, FastModePolicy>();
-  let providerCount = 0;
-  let forcedCatalogRefreshDepth = 0;
-  const registration = {
-    fastModePolicies,
-    beginForcedCatalogRefresh: () => {
-      forcedCatalogRefreshDepth++;
-      return {
-        providerCount,
-        finish: () => { forcedCatalogRefreshDepth--; },
-      };
-    },
-  };
+  const providerIds: string[] = [];
+  const registration = { fastModePolicies, providerIds };
   const configPath = path.join(
     process.env.PI_CODING_AGENT_DIR ?? path.join(homedir(), ".pi", "agent"),
     "custom-providers.json",
@@ -102,13 +92,9 @@ export function registerProviders(pi: ExtensionAPI): {
       pi.registerProvider(name, {
         baseUrl: provider.baseUrl,
         api: provider.api,
-        refreshModels: createModelRefresh(
-          name,
-          provider,
-          () => forcedCatalogRefreshDepth > 0,
-        ),
+        refreshModels: createModelRefresh(name, provider),
       });
-      providerCount++;
+      providerIds.push(name);
       const policy = fastModePolicy(configured, provider.api);
       if (policy) fastModePolicies.set(name, policy);
     } catch (error) {

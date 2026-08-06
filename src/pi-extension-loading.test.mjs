@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
-import { createInterface } from "node:readline";
 import test from "node:test";
 
 const extensionPath = fileURLToPath(new URL("../index.ts", import.meta.url));
@@ -17,7 +16,7 @@ const basePiArgs = [
   "--no-context-files",
 ];
 
-test("[host integration] discovers one dynamic catalog before enabledModels scope", async () => {
+test("[host integration] completes Pre-Scope Discovery during cache-only init", async () => {
   const home = mkdtempSync(join(tmpdir(), "custom-providers-pi-scope-"));
   let catalogRequests = 0;
   const server = createServer((request, response) => {
@@ -43,92 +42,45 @@ test("[host integration] discovers one dynamic catalog before enabledModels scop
       loaderTest: { baseUrl, api: "openai-responses" },
     }));
     writeFileSync(join(agentDir, "auth.json"), JSON.stringify({
-      openai: { type: "api_key", key: "test-openai-key" },
       loaderTest: { type: "api_key", key: "test-loader-key" },
-    }));
-    writeFileSync(join(agentDir, "settings.json"), JSON.stringify({
-      enabledModels: ["openai/gpt-4o-mini", "loaderTest/test-model"],
-    }));
-    writeFileSync(join(agentDir, "models-store.json"), JSON.stringify({
-      openai: {
-        checkedAt: Date.now(),
-        models: [{
-          id: "gpt-4o-mini",
-          name: "gpt-4o-mini",
-          api: "openai-responses",
-          provider: "openai",
-          baseUrl: "https://api.openai.com/v1",
-          reasoning: false,
-          input: ["text"],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 128_000,
-          maxTokens: 4_096,
-        }],
-      },
     }));
 
     const env = { ...process.env, HOME: home, PI_CODING_AGENT_DIR: agentDir };
     delete env.PI_OFFLINE;
-    const seed = spawnSync(
-      "pi",
-      [
-        ...basePiArgs,
-        "--model",
-        "openai/gpt-4o-mini",
-        "--mode",
-        "json",
-      ],
-      { cwd, encoding: "utf8", env },
-    );
-    assert.ifError(seed.error);
-    assert.equal(seed.status, 0, seed.stderr || seed.stdout);
-
     child = spawn(
       "pi",
       [
         ...basePiArgs,
         "--extension",
         extensionPath,
-        "--continue",
-        "--mode",
-        "rpc",
+        "--list-models",
+        "loaderTest",
       ],
       { cwd, env },
     );
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
     let output = "";
     let errorOutput = "";
-    let response;
-    const result = await new Promise((resolve, reject) => {
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.stderr.on("data", (chunk) => { errorOutput += chunk; });
+    const status = await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         child.kill("SIGTERM");
-        reject(new Error(`Pi RPC timed out. stdout=${output} stderr=${errorOutput}`));
+        reject(new Error(`Pi list-models timed out. stdout=${output} stderr=${errorOutput}`));
       }, 15_000);
-      const lines = createInterface({ input: child.stdout });
-      lines.on("line", (line) => {
-        output += `${line}\n`;
-        try {
-          const value = JSON.parse(line);
-          if (value.id === "cycle") {
-            response = value;
-            child.kill("SIGTERM");
-          }
-        } catch {}
-      });
-      child.stderr.on("data", (chunk) => {
-        errorOutput += chunk;
-      });
       child.once("error", reject);
-      child.once("close", (status, signal) => {
+      child.once("close", (code) => {
         clearTimeout(timeout);
-        resolve({ status, signal });
+        resolve(code);
       });
-      child.stdin.write(JSON.stringify({ id: "cycle", type: "cycle_model" }) + "\n");
     });
 
-    assert.ok(response, `missing cycle response: ${JSON.stringify(result)} ${errorOutput}`);
-    assert.equal(response.success, true);
-    assert.equal(response.data.model.provider, "loaderTest");
+    assert.equal(status, 0, errorOutput || output);
+    assert.match(output, /test-model/);
     assert.equal(catalogRequests, 1);
+    const stored = JSON.parse(readFileSync(join(agentDir, "models-store.json"), "utf8"));
+    assert.deepEqual(stored.loaderTest.models.map(({ id }) => id), ["test-model"]);
   } finally {
     child?.kill("SIGTERM");
     await new Promise((resolve) => server.close(resolve));
