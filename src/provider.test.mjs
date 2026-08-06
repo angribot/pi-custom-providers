@@ -65,15 +65,26 @@ function initialize(config) {
   return initializeContent(JSON.stringify(config));
 }
 
-function createStore(entry) {
+function createStore(entry, { acceptPublication = true } = {}) {
   let current = entry;
   const writes = [];
   let deleted = 0;
   return {
-    store: {
-      async read() { return current; },
-      async write(next) { current = structuredClone(next); writes.push(current); },
-      async delete() { current = undefined; deleted++; },
+    context() {
+      return {
+        stored: current === undefined ? undefined : structuredClone(current),
+        async publish({ persist }) {
+          if (!acceptPublication) return false;
+          if (persist === null) {
+            current = undefined;
+            deleted++;
+          } else if (persist !== undefined) {
+            current = structuredClone(persist);
+            writes.push(current);
+          }
+          return true;
+        },
+      };
     },
     get current() { return current; },
     get writes() { return writes; },
@@ -101,8 +112,9 @@ async function refresh(harness, store, options = {}) {
   assert.ok(provider, "provider registered");
   return provider.config.refreshModels({
     credential: { type: "api_key", key: "test-key" },
-    store: store.store,
+    ...store.context(),
     allowNetwork: true,
+    signal: new AbortController().signal,
     ...options,
   });
 }
@@ -410,6 +422,49 @@ test("cache-only startup rejects invalid stores and shares one eligible pre-scop
   }
 });
 
+test("a superseding cache-only generation publishes the shared Pre-Scope Discovery", async () => {
+  const harness = await initialize({
+    providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
+  });
+  const storage = createStore();
+  const firstController = new AbortController();
+  let requests = 0;
+  let respond;
+  globalThis.fetch = async (_url, { signal }) => new Promise((resolve, reject) => {
+    requests++;
+    respond = () => resolve({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({ data: [{ id: "discovered" }] }),
+    });
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+  });
+  try {
+    const first = refresh(harness, storage, {
+      allowNetwork: false,
+      signal: firstController.signal,
+    });
+    for (let attempt = 0; attempt < 20 && !respond; attempt++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.ok(respond, "Pre-Scope Discovery started");
+
+    const replacement = refresh(harness, storage, { allowNetwork: false });
+    firstController.abort();
+    respond();
+
+    await first;
+    const models = await replacement;
+    assert.deepEqual(models.map(({ id }) => id), ["discovered"]);
+    assert.equal(requests, 1);
+    assert.deepEqual(storage.current.models.map(({ id }) => id), ["discovered"]);
+    assert.equal(storage.writes.length, 1);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("overlapping forced refreshes are not locally merged", async () => {
   const harness = await initialize({
     providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
@@ -470,6 +525,28 @@ test("cancelled catalog response neither publishes nor writes", async () => {
   try {
     const models = await refresh(harness, storage, { signal: controller.signal });
     assert.deepEqual(models.map(({ id }) => id), [officialOpenAIModel.id]);
+    assert.deepEqual(storage.writes, []);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("superseded catalog publication preserves the stored catalog", async () => {
+  const harness = await initialize({
+    providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
+  });
+  const stored = { checkedAt: 0, models: [storedModel()] };
+  const storage = createStore(stored, { acceptPublication: false });
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    json: async () => ({ data: [{ id: "superseded" }] }),
+  });
+  try {
+    const models = await refresh(harness, storage);
+    assert.deepEqual(models.map(({ id }) => id), [officialOpenAIModel.id]);
+    assert.deepEqual(storage.current, stored);
     assert.deepEqual(storage.writes, []);
   } finally {
     globalThis.fetch = previousFetch;
