@@ -15,6 +15,7 @@
     "type": "git",
     "url": "git+https://github.com/angribot/pi-custom-providers.git"
   },
+  "homepage": "https://pi.dev/packages/pi-custom-providers",
   "files": [
     "index.ts",
     "src",
