@@ -15,7 +15,12 @@ function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function providerConfig(configured: unknown): ProviderConfig | undefined {
+interface NormalizedRelayConfig {
+  provider: ProviderConfig;
+  fastModePolicy?: FastModePolicy;
+}
+
+function normalizeRelayConfig(configured: unknown): NormalizedRelayConfig | undefined {
   if (!isRecord(configured) || typeof configured.baseUrl !== "string") return undefined;
   const baseUrl = normalizeBaseUrl(configured.baseUrl);
   const api = configured.api as ProviderApi;
@@ -39,21 +44,20 @@ function providerConfig(configured: unknown): ProviderConfig | undefined {
       ),
     )
     : undefined;
-
-  return {
-    baseUrl,
-    api,
-    ...(costMultiplier !== undefined && { costMultiplier }),
-    ...(modelCostMultipliers && Object.keys(modelCostMultipliers).length > 0 && { modelCostMultipliers }),
-  };
-}
-
-// Fast mode is a request-time concern, so it stays out of ProviderConfig.
-function fastModePolicy(configured: unknown, api: ProviderApi): FastModePolicy | undefined {
-  if (!isRecord(configured) || api !== "openai-responses") return undefined;
-  return configured.fastModePolicy === "request" || configured.fastModePolicy === "disabled"
+  const fastModePolicy = api === "openai-responses"
+    && (configured.fastModePolicy === "request" || configured.fastModePolicy === "disabled")
     ? configured.fastModePolicy
     : undefined;
+
+  return {
+    provider: {
+      baseUrl,
+      api,
+      ...(costMultiplier !== undefined && { costMultiplier }),
+      ...(modelCostMultipliers && Object.keys(modelCostMultipliers).length > 0 && { modelCostMultipliers }),
+    },
+    ...(fastModePolicy && { fastModePolicy }),
+  };
 }
 
 export function registerProviders(pi: ExtensionAPI): {
@@ -84,19 +88,19 @@ export function registerProviders(pi: ExtensionAPI): {
   for (const [name, configured] of Object.entries(config)) {
     if (name === "$schema") continue;
     try {
-      const provider = providerConfig(configured);
-      if (!provider) {
+      const normalized = normalizeRelayConfig(configured);
+      if (!normalized) {
         console.warn(`[custom-providers] ${name}: invalid provider; skipped.`);
         continue;
       }
+      const { provider, fastModePolicy } = normalized;
       pi.registerProvider(name, {
         baseUrl: provider.baseUrl,
         api: provider.api,
         refreshModels: createModelRefresh(name, provider),
       });
       providerIds.push(name);
-      const policy = fastModePolicy(configured, provider.api);
-      if (policy) fastModePolicies.set(name, policy);
+      if (fastModePolicy) fastModePolicies.set(name, fastModePolicy);
     } catch (error) {
       console.error(`[custom-providers] ${name}: setup failed: ${formatError(error)}`);
     }
