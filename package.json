@@ -20,6 +20,7 @@
     "index.ts",
     "src",
     "custom-providers.schema.json",
+    "CHANGELOG.md",
     "README.md",
     "LICENSE"
   ],
@@ -29,6 +30,7 @@
     ]
   },
   "scripts": {
+    "lint": "oxlint .",
     "test": "node --test --test-concurrency=1 \"src/*.test.mjs\"",
     "typecheck": "tsc"
   },
@@ -39,6 +41,7 @@
   "devDependencies": {
     "@earendil-works/pi-ai": "^0.84.0",
     "@earendil-works/pi-coding-agent": "^0.84.0",
+    "oxlint": "^1.79.0",
     "typescript": "^7.0.2"
   }
 }
