@@ -9,7 +9,15 @@ capability and cost metadata from pi's official catalog so `/model` and cost acc
 
 ## Install
 
+Install the published npm package:
+
+```bash
+pi install npm:pi-custom-providers
 ```
+
+To install directly from GitHub instead:
+
+```bash
 pi install git:github.com/angribot/pi-custom-providers
 ```
 
@@ -21,7 +29,7 @@ Create `~/.pi/agent/custom-providers.json`. Each top-level key is a provider nam
 
 ```json
 {
-  "$schema": "./git/github.com/angribot/pi-custom-providers/custom-providers.schema.json",
+  "$schema": "./npm/node_modules/pi-custom-providers/custom-providers.schema.json",
   "my-relay": {
     "baseUrl": "https://relay.example.com/v1",
     "api": "openai-responses",
@@ -44,9 +52,12 @@ Create `~/.pi/agent/custom-providers.json`. Each top-level key is a provider nam
 | `modelCostMultipliers` | no | Per-model override keyed by exact model ID. Beats `costMultiplier`. |
 | `fastModePolicy` | no | `response` (default), `request`, or `disabled`. `openai-responses` only. |
 
-`$schema` is optional and only drives editor completion. The path above is relative to `~/.pi/agent/`
-and matches a `pi install git:` checkout; a manual clone into `extensions/` uses
-`./extensions/pi-custom-providers/custom-providers.schema.json` instead.
+`$schema` is optional and only drives editor completion. Its path depends on how the package was installed,
+and is relative to `~/.pi/agent/`:
+
+- npm: `./npm/node_modules/pi-custom-providers/custom-providers.schema.json`
+- Git: `./git/github.com/angribot/pi-custom-providers/custom-providers.schema.json`
+- manual clone: `./extensions/pi-custom-providers/custom-providers.schema.json`
 
 No `apiKey` field. The extension does not set one, so credentials resolve through pi's own mechanisms:
 `/login <provider>` or the matching environment variable.
