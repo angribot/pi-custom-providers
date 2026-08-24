@@ -9,13 +9,13 @@ capability and cost metadata from pi's official catalog so `/model` and cost acc
 
 ## Install
 
-Install the published npm package:
+The recommended installation method is npm:
 
 ```bash
 pi install npm:pi-custom-providers
 ```
 
-To install directly from GitHub instead:
+Alternatively, install directly from GitHub:
 
 ```bash
 pi install git:github.com/angribot/pi-custom-providers
