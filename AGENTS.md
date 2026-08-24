@@ -27,6 +27,13 @@ and the tests resolve.
 Judge compatibility from step 3, not from comparing version strings. A host
 version different from the baseline is not by itself an incompatibility.
 
+## Bumping the package version
+
+1. Choose the next SemVer version from changes since the latest tag; ask if the version is ambiguous.
+2. From a clean, up-to-date `main`, create a dedicated branch.
+3. Update `package.json` and release the Unreleased entries in `CHANGELOG.md`, including its comparison links.
+4. Run `npm run lint`, `npm run typecheck`, `npm test`, and `npm pack --dry-run`; confirm the package reports the new version.
+
 ## Never
 
 - Pin `peerDependencies` — pi injects the host copies and installs extensions with peer resolution disabled.
