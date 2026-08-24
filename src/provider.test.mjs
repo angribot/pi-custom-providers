@@ -206,6 +206,64 @@ test("relay pricing shapes refreshed models, not the stored catalog", async () =
   }
 });
 
+test("HTTP Catalog failures retain safe response diagnostics without reading the body", async () => {
+  const harness = await initialize({
+    providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
+  });
+  const apiKey = "catalog-secret";
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.headers.Authorization, `Bearer ${apiKey}`);
+    return {
+      ok: false,
+      status: 429,
+      statusText: "Too Many Requests",
+      headers: new Headers({
+        "x-request-id": `request-${apiKey}`,
+        "x-oai-request-id": "openai-456",
+        "cf-ray": "ray-789",
+        "retry-after": "30",
+      }),
+      json: async () => { throw new Error("response-body-secret"); },
+    };
+  };
+  try {
+    await assert.rejects(
+      refresh(harness, createStore(), { credential: { type: "api_key", key: apiKey } }),
+      (error) => {
+        assert.equal(
+          error.message,
+          "HTTP 429: Too Many Requests (x-request-id=request-[redacted]; x-oai-request-id=openai-456; cf-ray=ray-789; retry-after=30)",
+        );
+        assert.doesNotMatch(error.message, /catalog-secret|response-body-secret/);
+        return true;
+      },
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("HTTP Catalog failures remain readable when diagnostic headers are absent", async () => {
+  const harness = await initialize({
+    providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
+  });
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 503,
+    statusText: "Service Unavailable",
+    json: async () => ({ error: "response-body-secret" }),
+  });
+  try {
+    await assert.rejects(refresh(harness, createStore()), (error) => {
+      assert.equal(error.message, "HTTP 503: Service Unavailable");
+      assert.doesNotMatch(error.message, /response-body-secret|undefined/);
+      return true;
+    });
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("failed or empty relay refreshes preserve the stored catalog for cache-only recovery", async () => {
   const originalTimeout = AbortSignal.timeout;
   const harness = await initialize({
@@ -295,7 +353,7 @@ test("/refresh-custom-models targets configured relays and reports the host resu
   const results = [
     { aborted: false, errors: new Map() },
     { aborted: true, errors: new Map() },
-    { aborted: false, errors: new Map([["providerB", new Error("relay unavailable")]]) },
+    { aborted: false, errors: new Map([["providerB", new Error("HTTP 429: Too Many Requests (x-request-id=request-123)")]]) },
   ];
   const refreshOptions = [];
   const notifications = [];
@@ -323,7 +381,7 @@ test("/refresh-custom-models targets configured relays and reports the host resu
   assert.deepEqual(notifications, [
     ["Catalog refresh completed for 2 relays", "info"],
     ["Catalog refresh cancelled", "warning"],
-    ["Catalog refresh failed for providerB: relay unavailable", "error"],
+    ["Catalog refresh failed for providerB: HTTP 429: Too Many Requests (x-request-id=request-123)", "error"],
   ]);
 });
 
