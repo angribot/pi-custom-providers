@@ -128,6 +128,15 @@ function fresh(stored: unknown): boolean {
   return age >= 0 && age < CATALOG_TTL_MS;
 }
 
+const DIAGNOSTIC_RESPONSE_HEADERS = [
+  "x-request-id",
+  "x-oai-request-id",
+  "request-id",
+  "cf-ray",
+  "retry-after",
+] as const;
+const MAX_DIAGNOSTIC_VALUE_LENGTH = 200;
+
 async function fetchIds(
   baseUrl: string,
   api: ProviderApi,
@@ -142,7 +151,7 @@ async function fetchIds(
       : { Authorization: `Bearer ${apiKey}` },
     signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
   });
-  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  if (!response.ok) throw catalogHttpError(response, apiKey);
   const payload = await response.json();
   if (!isRecord(payload) || !Array.isArray(payload.data)) {
     throw new Error("Invalid model response; expected a data array.");
@@ -152,6 +161,23 @@ async function fetchIds(
   );
   if (ids.length === 0) throw new Error("Model refresh returned no models.");
   return ids;
+}
+
+function safeDiagnosticValue(value: string, apiKey: string): string {
+  const redacted = apiKey ? value.split(apiKey).join("[redacted]") : value;
+  return redacted.replace(/\p{Cc}/gu, " ").slice(0, MAX_DIAGNOSTIC_VALUE_LENGTH);
+}
+
+function catalogHttpError(response: Response, apiKey: string): Error {
+  const details = DIAGNOSTIC_RESPONSE_HEADERS.flatMap((name) => {
+    const value = response.headers?.get(name);
+    if (!value) return [];
+    const safeValue = safeDiagnosticValue(value, apiKey);
+    return safeValue ? [`${name}=${safeValue}`] : [];
+  });
+  const statusText = safeDiagnosticValue(response.statusText, apiKey);
+  const context = details.length > 0 ? ` (${details.join("; ")})` : "";
+  return new Error(`HTTP ${response.status}: ${statusText}${context}`);
 }
 
 function catalogStoreEntry(ids: readonly string[], provider: string, config: ProviderConfig) {
