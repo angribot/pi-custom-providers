@@ -206,6 +206,85 @@ test("relay pricing shapes refreshed models, not the stored catalog", async () =
   }
 });
 
+test("warns once per discovered Catalog about distinct Projection fallbacks", async () => {
+  const harness = await initialize({
+    providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
+  });
+  const storage = createStore();
+  const unknownIds = [
+    "relay-only-alpha",
+    "relay-only-beta",
+    "relay-only-gamma",
+    "relay-only-delta",
+  ];
+  for (const id of unknownIds) assert.equal(officialIdCounts.has(id), false, id);
+
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => warnings.push(message);
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    json: async () => ({
+      data: [
+        { id: officialOpenAIModel.id },
+        { id: "gpt-5.6" },
+        ...unknownIds.map((id) => ({ id })),
+        { id: unknownIds[0] },
+      ],
+    }),
+  });
+  try {
+    const models = await refresh(harness, storage);
+    assert.deepEqual(models.map(({ id }) => id), [
+      officialOpenAIModel.id,
+      "gpt-5.6",
+      ...unknownIds,
+      unknownIds[0],
+    ]);
+
+    await refresh(harness, storage, { allowNetwork: false, credential: undefined });
+    await refresh(harness, storage, { allowNetwork: false, credential: undefined });
+
+    assert.deepEqual(warnings, [
+      "[custom-providers] providerA: 4 unknown Catalog IDs use conservative fallback metadata (sample: relay-only-alpha, relay-only-beta, relay-only-gamma)",
+    ]);
+    assert.doesNotMatch(warnings[0], /relay-only-delta/);
+  } finally {
+    console.warn = originalWarn;
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("bounds Provider IDs and Model IDs in Projection fallback warnings", async () => {
+  const provider = `provider\u2028${"p".repeat(200)}`;
+  const unknownId = `relay\u2029${"m".repeat(200)}`;
+  const harness = await initialize({
+    [provider]: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
+  });
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => warnings.push(message);
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    json: async () => ({ data: [{ id: unknownId }] }),
+  });
+  try {
+    await refresh(harness, createStore(), { provider });
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /1 unknown Catalog ID uses conservative fallback metadata/);
+    assert.doesNotMatch(warnings[0], /[\p{Cc}\p{Zl}\p{Zp}]/u);
+    assert.doesNotMatch(warnings[0], new RegExp(`p{81}|m{81}`));
+    assert.ok(warnings[0].length < 320);
+  } finally {
+    console.warn = originalWarn;
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("HTTP Catalog failures retain safe response diagnostics without reading the body", async () => {
   const harness = await initialize({
     providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
@@ -575,12 +654,15 @@ test("failed pre-scope discovery degrades to cache-only instead of rejecting", a
   }
 });
 
-test("cancelled catalog response neither publishes nor writes", async () => {
+test("cancelled catalog response neither publishes, writes, nor warns", async () => {
   const harness = await initialize({
     providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
   });
   const storage = createStore({ checkedAt: 0, models: [storedModel()] });
   const controller = new AbortController();
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => warnings.push(message);
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
@@ -594,17 +676,22 @@ test("cancelled catalog response neither publishes nor writes", async () => {
     const models = await refresh(harness, storage, { signal: controller.signal });
     assert.deepEqual(models.map(({ id }) => id), [officialOpenAIModel.id]);
     assert.deepEqual(storage.writes, []);
+    assert.deepEqual(warnings, []);
   } finally {
+    console.warn = originalWarn;
     globalThis.fetch = previousFetch;
   }
 });
 
-test("superseded catalog publication preserves the stored catalog", async () => {
+test("superseded catalog publication preserves the store without warning", async () => {
   const harness = await initialize({
     providerA: { baseUrl: "https://provider.invalid/v1", api: "openai-responses" },
   });
   const stored = { checkedAt: 0, models: [storedModel()] };
   const storage = createStore(stored, { acceptPublication: false });
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => warnings.push(message);
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
@@ -616,7 +703,9 @@ test("superseded catalog publication preserves the stored catalog", async () => 
     assert.deepEqual(models.map(({ id }) => id), [officialOpenAIModel.id]);
     assert.deepEqual(storage.current, stored);
     assert.deepEqual(storage.writes, []);
+    assert.deepEqual(warnings, []);
   } finally {
+    console.warn = originalWarn;
     globalThis.fetch = previousFetch;
   }
 });

@@ -70,13 +70,37 @@ function multiplyCost(cost: ModelCost, multiplier: number): ModelCost {
 
 // ADR-0003: exact-match aliases only; no prefix or fuzzy resolution.
 const ALIASES = new Map<string, string>([["gpt-5.6", "gpt-5.6-sol"]]);
+const FALLBACK_WARNING_SAMPLE_SIZE = 3;
+const MAX_WARNING_VALUE_LENGTH = 80;
+
+function boundedDiagnosticValue(value: string, maxLength: number): string {
+  return value.replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, " ").slice(0, maxLength);
+}
+
+function officialModelFor(id: string): Model<Api> | undefined {
+  return OFFICIAL_MODELS.get(ALIASES.get(id) ?? id);
+}
+
+function warnAboutProjectionFallbacks(provider: string, ids: readonly string[]): void {
+  const fallbackIds = [...new Set(ids.filter((id) => officialModelFor(id) === undefined))];
+  if (fallbackIds.length === 0) return;
+  const sample = fallbackIds
+    .slice(0, FALLBACK_WARNING_SAMPLE_SIZE)
+    .map((id) => boundedDiagnosticValue(id, MAX_WARNING_VALUE_LENGTH));
+  const summary = fallbackIds.length === 1
+    ? "1 unknown Catalog ID uses"
+    : `${fallbackIds.length} unknown Catalog IDs use`;
+  console.warn(
+    `[custom-providers] ${boundedDiagnosticValue(provider, MAX_WARNING_VALUE_LENGTH)}: ${summary} conservative fallback metadata (sample: ${sample.join(", ")})`,
+  );
+}
 
 export function buildModelDefinition(
   id: string,
   config: ProviderConfig,
   multiplier = multiplierFor(id, config),
 ): ProviderModelConfig {
-  const official = OFFICIAL_MODELS.get(ALIASES.get(id) ?? id);
+  const official = officialModelFor(id);
   const thinkingLevelMap = official?.thinkingLevelMap && { ...official.thinkingLevelMap };
   return {
     id,
@@ -165,7 +189,7 @@ async function fetchIds(
 
 function safeDiagnosticValue(value: string, apiKey: string): string {
   const redacted = apiKey ? value.split(apiKey).join("[redacted]") : value;
-  return redacted.replace(/\p{Cc}/gu, " ").slice(0, MAX_DIAGNOSTIC_VALUE_LENGTH);
+  return boundedDiagnosticValue(redacted, MAX_DIAGNOSTIC_VALUE_LENGTH);
 }
 
 function catalogHttpError(response: Response, apiKey: string): Error {
@@ -198,6 +222,12 @@ export function createModelRefresh(
 ) {
   let preScopeAttempted = false;
   let preScopeRefresh: Promise<ProviderModelConfig[]> | undefined;
+  const warnedCatalogs = new WeakSet<ProviderModelConfig[]>();
+  const warnAboutFallbacksOnce = (models: ProviderModelConfig[]): void => {
+    if (warnedCatalogs.has(models)) return;
+    warnedCatalogs.add(models);
+    warnAboutProjectionFallbacks(provider, models.map(({ id }) => id));
+  };
   const refresh = async (
     context: RefreshModelsContext,
     preScope = false,
@@ -235,6 +265,7 @@ export function createModelRefresh(
     const published = await context.publish({
       persist: catalogStoreEntry(fetchedIds, provider, config),
     });
+    if (published) warnAboutFallbacksOnce(models);
     return published || preScope ? models : cached;
   };
 
@@ -245,6 +276,7 @@ export function createModelRefresh(
         const published = await context.publish({
           persist: catalogStoreEntry(models.map(({ id }) => id), provider, config),
         });
+        if (published) warnAboutFallbacksOnce(models);
         return published ? models : [];
       });
     }
