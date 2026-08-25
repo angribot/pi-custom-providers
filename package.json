@@ -39,9 +39,9 @@
     "@earendil-works/pi-coding-agent": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.84.0",
-    "@earendil-works/pi-coding-agent": "^0.84.0",
-    "oxlint": "^1.79.0",
+    "@earendil-works/pi-ai": "^0.84.3",
+    "@earendil-works/pi-coding-agent": "^0.84.3",
+    "oxlint": "^1.80.0",
     "typescript": "^7.0.2"
   }
 }

@@ -1,6 +1,6 @@
 # pi-custom-providers
 
-Register OpenAI- and Anthropic-compatible relays as [pi](https://github.com/badlogic/pi-mono) providers,
+Register OpenAI- and Anthropic-compatible relays as [pi](https://github.com/earendil-works/pi) providers,
 with official model metadata and per-relay pricing.
 
 A relay speaks a familiar api but serves its own model list under its own names, often with its own
