@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { registerFastMode } from "./fast-mode.ts";
+import { registerFastMode } from "../src/fast-mode.ts";
 import {
   createTestContext,
   createTestPi,
   fire,
   inject,
   toggle,
-} from "./test-harness.mjs";
+} from "./test-harness.ts";
 
 const STATUS_KEY = "custom-providers-fast-mode";
 

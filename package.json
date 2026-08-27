@@ -31,7 +31,7 @@
   },
   "scripts": {
     "lint": "oxlint .",
-    "test": "node --test --test-concurrency=1 \"src/*.test.mjs\"",
+    "test": "node --test --test-concurrency=1 \"tests/*.test.ts\"",
     "typecheck": "tsc"
   },
   "peerDependencies": {
