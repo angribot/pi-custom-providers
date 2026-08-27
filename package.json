@@ -1,6 +1,6 @@
 {
   "name": "pi-custom-providers",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "pi extension for custom providers, with metadata and pricing that line up",
   "type": "module",
   "license": "MIT",
