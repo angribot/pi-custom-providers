@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { getBuiltinModels } from "@earendil-works/pi-ai/providers/all";
-import { createTestPi } from "./test-harness.mjs";
+import { createTestPi } from "./test-harness.ts";
 
 const officialCatalogs = new Map(
   ["openai", "anthropic", "xai", "moonshotai", "zai", "deepseek"]

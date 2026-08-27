@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Moved tests out of the published source tree and migrated them from JavaScript to TypeScript.
+
 ## [0.3.1] - 2026-08-24
 
 ### Added
