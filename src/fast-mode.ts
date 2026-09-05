@@ -61,7 +61,9 @@ export function registerFastMode(
     candidate?.provider ? providerPolicies.get(candidate.provider) ?? "response" : "response";
 
   const isApplicable = (candidate: SelectedModel | undefined): boolean =>
-    candidate?.api === "openai-responses" && policyFor(candidate) !== "disabled";
+    (candidate?.api === "openai-responses"
+      || (candidate?.api === "openai-codex-responses" && candidate.provider === "openai-codex"))
+    && policyFor(candidate) !== "disabled";
 
   const syncStatus = (ctx: ExtensionContext, model: SelectedModel | undefined = ctx.model as SelectedModel | undefined): void => {
     if (ctx.mode === "tui") ctx.ui.setStatus(FAST_STATUS_KEY, enabled && isApplicable(model) ? "⚡ Fast mode" : undefined);
