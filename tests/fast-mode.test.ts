@@ -116,6 +116,42 @@ test("injects priority only for enabled applicable object payloads", async () =>
   assert.equal(inject(harness, ctx, { model: "claude" }), undefined);
 });
 
+test("built-in Codex fast mode injects priority without changing host cost", async () => {
+  const harness = createTestPi();
+  registerFastMode(harness.pi);
+  const { ctx, statuses } = createTestContext({
+    api: "openai-codex-responses",
+    provider: "openai-codex",
+    modelId: "gpt-5.4",
+    registryModels: new Map([["openai-codex/gpt-5.4", {
+      cost: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+    }]]),
+  });
+  const payload = { model: "gpt-5.4" };
+  assert.equal(inject(harness, ctx, payload), undefined);
+
+  await toggle(harness, ctx);
+  assert.equal(statuses.get(STATUS_KEY), "⚡ Fast mode");
+  assert.deepEqual(inject(harness, ctx, payload), { ...payload, service_tier: "priority" });
+  assert.deepEqual(payload, { model: "gpt-5.4" });
+  const response = { ...message(), api: "openai-codex-responses", provider: "openai-codex" };
+  const originalCost = { ...response.usage.cost };
+  assert.equal(endMessage(harness, ctx, response), undefined);
+  assert.deepEqual(response.usage.cost, originalCost);
+
+  ctx.model = { ...ctx.model, provider: "custom-codex" };
+  fire(harness, { type: "model_select", model: ctx.model, source: "set" }, ctx);
+  assert.equal(statuses.get(STATUS_KEY), undefined);
+  assert.equal(inject(harness, ctx, payload), undefined);
+
+  ctx.model = { ...ctx.model, provider: "openai-codex" };
+  fire(harness, { type: "model_select", model: ctx.model, source: "set" }, ctx);
+  assert.equal(statuses.get(STATUS_KEY), "⚡ Fast mode");
+  await toggle(harness, ctx);
+  assert.equal(statuses.get(STATUS_KEY), undefined);
+  assert.equal(inject(harness, ctx, payload), undefined);
+});
+
 test("request policy recomputes injected request cost with public calculator and Priority Surcharge", async () => {
   const harness = createTestPi();
   registerFastMode(harness.pi, new Map([["providerA", "request"]]));

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Fast mode now supports pi's built-in Codex OAuth models without adding a local priority surcharge.
+
 ## [0.3.2] - 2026-08-27
 
 ### Changed

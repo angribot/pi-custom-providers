@@ -79,8 +79,15 @@ available.
 
 ## Fast mode
 
-For `openai-responses` relays, fast mode is exposed as a session toggle. The policy says who applies the
-priority surcharge:
+Use `/fast` to toggle fast mode for the session, or `--fast` to start with it enabled. It supports
+`openai-responses` models and pi's built-in `openai-codex` OAuth models (`openai-codex-responses`).
+Enabling it requests `service_tier: "priority"`; it does not confirm that the server grants priority.
+
+For Codex subscriptions, Fast can consume more plan usage. The extension adds no surcharge and leaves
+pi's cost estimates unchanged; those estimates do not measure subscription quota consumption. No
+Codex relay configuration or account eligibility check is added.
+
+For `openai-responses` relays, the policy says who applies the priority surcharge:
 
 - `response` (default) — the relay's reported cost already includes it. Nothing is added locally.
 - `request` — the relay bills the surcharge but does not report it. It is applied locally per request.

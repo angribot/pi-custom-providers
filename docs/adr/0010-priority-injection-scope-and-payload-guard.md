@@ -1,6 +1,8 @@
 # Priority injection scope, and why the payload guard rejects class instances
 
-`service_tier: "priority"` is only meaningful on `openai-responses`, so injection is gated on the selected model's API and on the relay's Fast Mode Policy not being `disabled`. Anything else passes through untouched.
+Injection of `service_tier: "priority"` covers `openai-responses` and Pi's built-in `openai-codex` provider using `openai-codex-responses`, with Fast Mode Policy not being `disabled`. Anything else passes through untouched. This expands the original Responses-only scope: Codex OAuth also uses the priority request tier, without requiring Codex relay registration.
+
+For built-in Codex, the extension adds no Priority Surcharge and leaves host cost estimates untouched. Those estimates are not subscription quota accounting. The toggle requests priority; it does not check account eligibility or guarantee the server grants it.
 
 The payload is shallow-copied rather than mutated. The host owns that object and may still read it after the hook returns; mutating in place would make an unrelated retry inherit a tier the user has since toggled off.
 

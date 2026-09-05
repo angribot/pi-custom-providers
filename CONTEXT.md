@@ -49,7 +49,7 @@ _Avoid_: fast multiplier, priority multiplier
 ### Runtime behavior
 
 **Fast Mode**:
-A session-scoped toggle that asks for priority-tier service by injecting `service_tier: "priority"` into the request. Only meaningful for `openai-responses` relays.
+A session-scoped preference requesting priority-tier service for OpenAI Responses models and Pi's built-in Codex OAuth models. It expresses a request, not a guarantee that priority service is granted.
 _Avoid_: priority mode, turbo
 
 **Fast Mode Policy**:
