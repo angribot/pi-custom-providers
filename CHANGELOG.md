@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Updated the pi development baseline to 0.86.0.
+- Documented explicit prompt cache warming configuration through pi's model overrides; relay cache lifetimes remain unset by default.
+
 ## [0.4.0] - 2026-09-05
 
 ### Added
