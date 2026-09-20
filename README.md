@@ -77,6 +77,32 @@ force an immediate, provider-targeted refresh for every valid configured relay. 
 completion, cancellation, or the Provider IDs that failed; a failed request keeps the stored Catalog
 available.
 
+### Prompt cache warming
+
+The extension leaves prompt cache lifetimes unset because a relay may retain cached prompts for a
+different duration than the official endpoint. To enable pi's cache warming for a relay model, confirm
+its cache lifetime and add an override in `~/.pi/agent/models.json`. For example, if
+`my-claude-relay` retains this model's prompts for at least 300 seconds:
+
+```json
+{
+  "providers": {
+    "my-claude-relay": {
+      "modelOverrides": {
+        "claude-sonnet-5": {
+          "promptCache": { "short": 300 }
+        }
+      }
+    }
+  }
+}
+```
+
+Merge this into any existing configuration, using the exact Provider ID and model ID. Lifetimes are in
+seconds; set `long` separately only if the relay supports it. Pi 0.86 defaults to warming during long
+tool executions when estimated savings justify it. Refresh requests are billed and included in session
+costs. Set `"cacheWarming": "off"` in pi's global `settings.json` to disable warming.
+
 ## Fast mode
 
 Use `/fast` to toggle fast mode for the session, or `--fast` to start with it enabled. It supports
