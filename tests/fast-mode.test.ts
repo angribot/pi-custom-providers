@@ -116,6 +116,37 @@ test("injects priority only for enabled applicable object payloads", async () =>
   assert.equal(inject(harness, ctx, { model: "claude" }), undefined);
 });
 
+test("virtual selections retain Fast preference without priority injection or local pricing", async () => {
+  const harness = createTestPi();
+  registerFastMode(harness.pi, new Map([["providerA", "request"]]));
+  const physical = { api: "openai-responses", provider: "providerA", id: "gpt-5.4" };
+  const virtual = { api: "pi-virtual", provider: "providerA", id: "auto" };
+  const { ctx, statuses } = createTestContext({ model: physical });
+  await toggle(harness, ctx);
+  assert.equal(statuses.get(STATUS_KEY), "⚡ Fast mode");
+
+  ctx.model = virtual;
+  fire(harness, { type: "model_select", model: virtual, previousModel: physical, source: "set" }, ctx);
+  assert.equal(statuses.get(STATUS_KEY), undefined);
+  const payload = { model: physical.id, service_tier: "default" };
+  assert.equal(inject(harness, ctx, payload), undefined);
+  assert.deepEqual(payload, { model: physical.id, service_tier: "default" });
+  assert.equal(endMessage(harness, ctx, message()), undefined);
+
+  fire(harness, { type: "session_start", reason: "resume" }, {
+    ...ctx,
+    sessionManager: { getBranch: () => harness.entries },
+  });
+  assert.equal(statuses.get(STATUS_KEY), undefined);
+  assert.equal(inject(harness, ctx, payload), undefined);
+
+  ctx.model = physical;
+  fire(harness, { type: "model_select", model: physical, previousModel: virtual, source: "set" }, ctx);
+  assert.equal(statuses.get(STATUS_KEY), "⚡ Fast mode");
+  assert.deepEqual(inject(harness, ctx, payload), { ...payload, service_tier: "priority" });
+  assert.equal(harness.entries.length, 1);
+});
+
 test("built-in Codex fast mode injects priority without changing host cost", async () => {
   const harness = createTestPi();
   registerFastMode(harness.pi);

@@ -60,6 +60,7 @@ export function registerFastMode(
   const policyFor = (candidate: SelectedModel | undefined): FastModePolicy =>
     candidate?.provider ? providerPolicies.get(candidate.provider) ?? "response" : "response";
 
+  // ctx.model is the selection, not the dispatched model; pi-virtual is intentionally unsupported.
   const isApplicable = (candidate: SelectedModel | undefined): boolean =>
     (candidate?.api === "openai-responses"
       || (candidate?.api === "openai-codex-responses" && candidate.provider === "openai-codex"))
