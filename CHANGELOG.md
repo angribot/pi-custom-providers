@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Updated the pi development baseline to 0.99.1 and narrowed relay model definitions to the host chat-model configuration type.
+- Documented and tested that Fast Mode does not apply to virtual model selections; its session preference is retained.
+- Clarified the new OpenAI ChatGPT login path and continued legacy OpenAI Codex support.
+
 ## [0.4.1] - 2026-09-20
 
 ### Changed

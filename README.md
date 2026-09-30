@@ -106,8 +106,16 @@ costs. Set `"cacheWarming": "off"` in pi's global `settings.json` to disable war
 ## Fast mode
 
 Use `/fast` to toggle fast mode for the session, or `--fast` to start with it enabled. It supports
-`openai-responses` models and pi's built-in `openai-codex` OAuth models (`openai-codex-responses`).
+physical `openai-responses` models and pi's built-in legacy `openai-codex` OAuth models (`openai-codex-responses`).
 Enabling it requests `service_tier: "priority"`; it does not confirm that the server grants priority.
+
+Pi 0.99 adds Sign in with ChatGPT through `/login openai`; the OpenAI provider supersedes
+`/login openai-codex`, now labeled OpenAI Codex (legacy). The extension still supports both
+physical API paths above; it does not add a login flow or use those subscriptions as relay credentials.
+
+Virtual models are not supported by Fast Mode, even when they route to a supported physical model.
+While a virtual model is selected, the preference is retained but no Fast status is shown, no priority
+tier is injected, and no local surcharge is applied. Select a supported physical model to use Fast Mode.
 
 For Codex subscriptions, Fast can consume more plan usage. The extension adds no surcharge and leaves
 pi's cost estimates unchanged; those estimates do not measure subscription quota consumption. No

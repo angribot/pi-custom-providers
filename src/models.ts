@@ -2,6 +2,8 @@ import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 import type { Api, Model, ModelCost, RefreshModelsContext } from "@earendil-works/pi-ai";
 import { getBuiltinModels } from "@earendil-works/pi-ai/providers/all";
 
+type ProviderChatModelConfig = Extract<ProviderModelConfig, { type?: "chat" }>;
+
 export type ProviderApi =
   | "openai-responses"
   | "openai-completions"
@@ -16,7 +18,7 @@ export interface ProviderConfig {
 
 const CATALOG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const CATALOG_TIMEOUT_MS = 5_000;
-const DEFAULT_MODEL: Omit<ProviderModelConfig, "id" | "name"> = {
+const DEFAULT_MODEL: Omit<ProviderChatModelConfig, "id" | "name"> = {
   reasoning: false,
   input: ["text"],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -99,7 +101,7 @@ export function buildModelDefinition(
   id: string,
   config: ProviderConfig,
   multiplier = multiplierFor(id, config),
-): ProviderModelConfig {
+): ProviderChatModelConfig {
   const official = officialModelFor(id);
   const thinkingLevelMap = official?.thinkingLevelMap && { ...official.thinkingLevelMap };
   return {
@@ -112,7 +114,7 @@ export function buildModelDefinition(
     maxTokens: official?.maxTokens ?? DEFAULT_MODEL.maxTokens,
     ...(thinkingLevelMap && { thinkingLevelMap }),
     ...(official?.api === config.api && official.compat && {
-      compat: { ...official.compat } as ProviderModelConfig["compat"],
+      compat: { ...official.compat } as ProviderChatModelConfig["compat"],
     }),
   };
 }
@@ -221,9 +223,9 @@ export function createModelRefresh(
   config: ProviderConfig,
 ) {
   let preScopeAttempted = false;
-  let preScopeRefresh: Promise<ProviderModelConfig[]> | undefined;
-  const warnedCatalogs = new WeakSet<ProviderModelConfig[]>();
-  const warnAboutFallbacksOnce = (models: ProviderModelConfig[]): void => {
+  let preScopeRefresh: Promise<ProviderChatModelConfig[]> | undefined;
+  const warnedCatalogs = new WeakSet<ProviderChatModelConfig[]>();
+  const warnAboutFallbacksOnce = (models: ProviderChatModelConfig[]): void => {
     if (warnedCatalogs.has(models)) return;
     warnedCatalogs.add(models);
     warnAboutProjectionFallbacks(provider, models.map(({ id }) => id));
@@ -231,7 +233,7 @@ export function createModelRefresh(
   const refresh = async (
     context: RefreshModelsContext,
     preScope = false,
-  ): Promise<ProviderModelConfig[]> => {
+  ): Promise<ProviderChatModelConfig[]> => {
     const stored = context.stored;
     const ids = storedIds(stored, provider, config.api, config.baseUrl);
     if (
@@ -269,7 +271,7 @@ export function createModelRefresh(
     return published || preScope ? models : cached;
   };
 
-  return (context: RefreshModelsContext): Promise<ProviderModelConfig[]> => {
+  return (context: RefreshModelsContext): Promise<ProviderChatModelConfig[]> => {
     if (!context.allowNetwork && preScopeRefresh) {
       return preScopeRefresh.then(async (models) => {
         if (context.signal.aborted || models.length === 0) return [];
