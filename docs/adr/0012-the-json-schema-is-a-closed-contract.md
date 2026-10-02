@@ -6,6 +6,6 @@
 
 `baseUrl` and `api` required, everything else optional. Those two are the Catalog Fingerprint minus the Provider ID (0006); a relay without them isn't underspecified, it's not a relay.
 
-`fastModePolicy` permitted only when `api` is `openai-responses`, via `if`/`then`. Fast Mode injects `service_tier` into a Responses-API payload and nothing else (0010), so the field is meaningless anywhere else. The loader drops it silently in that case; the schema is where the user finds out. Enums are closed for the same reason — a misspelled `requst` should be rejected, not read as the `response` default.
+`fastModePolicy` permitted only when `api` is `openai-responses`, via `if`/`then`. For relays, Fast Mode applies only to `openai-responses`, so this configuration field is meaningless for other Relay APIs. Built-in Codex support is a separate scope decision recorded in [ADR 0010](0010-priority-injection-scope-and-payload-guard.md). The loader drops it silently in that case; the schema is where the user finds out. Enums are closed for the same reason — a misspelled `requst` should be rejected, not read as the `response` default.
 
 Consequence: adding a Relay API means editing the union, the loader's accepted list, and this enum. Three places, deliberately — the schema is a separate artifact shipped to the user's editor, and generating it from the types would trade an editor-visible contract for build machinery.

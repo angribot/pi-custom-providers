@@ -125,7 +125,7 @@ For `openai-responses` relays, the policy says who applies the priority surcharg
 
 - `response` (default) — the relay's reported cost already includes it. Nothing is added locally.
 - `request` — the relay bills the surcharge but does not report it. It is applied locally per request.
-- `disabled` — no toggle is offered.
+- `disabled` — Fast Mode does not apply to this relay. `/fast` still toggles the session preference.
 
 ## Not covered
 
