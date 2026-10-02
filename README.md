@@ -144,7 +144,7 @@ npm run typecheck
 npm test
 ```
 
-Design decisions live in `docs/adr/`; the domain model is in `CONTEXT.md`.
+Design decisions live in `docs/adr/`; the domain model is in `GLOSSARY.md`.
 
 ## License
 

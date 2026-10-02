@@ -12,7 +12,7 @@ Default five-role vocabulary, label strings unchanged. See `docs/agents/triage-l
 
 ### Domain docs
 
-Single-context: root `CONTEXT.md` plus `docs/adr/`. See `docs/agents/domain.md`.
+Single-context: root `GLOSSARY.md` plus `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Upgrading the pi baseline
 
